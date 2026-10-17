@@ -104,8 +104,7 @@ server.on('upgrade', (req, socket, head) => {
     socket.destroy();
     return;
   }
-  proxy.ws(req, socket, head, { target: 'ws://127.0.0.1:6080/websockify' });
-});
+  proxy.ws(req, socket, head, {target: 'ws://127.0.0.1:6080'});
 proxy.on('error', (_err, _req, socket) => {
   if (socket && !socket.destroyed) socket.destroy();
 });
