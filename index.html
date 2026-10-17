@@ -1,104 +1,545 @@
+
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Remote Cloud Browser</title>
+
 <style>
-:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#080c14;color:#eef4ff}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;flex-direction:column}
-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;background:#111a2a;border-bottom:1px solid #28334a}
-.brand{font-weight:800;white-space:nowrap}.status{font-size:12px;color:#7ee6b4}.address{display:flex;gap:8px;flex:1;min-width:220px}
-input{flex:1;min-width:100px;background:#070b12;color:#fff;border:1px solid #34415b;border-radius:8px;padding:10px}
-button{border:1px solid #3c4b67;background:#202c42;color:#eef4ff;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:650}
-button.primary{background:#19d4e8;color:#041219;border-color:#19d4e8}button:hover{filter:brightness(1.12)}
-main{flex:1;display:flex;flex-direction:column;min-height:0;padding:10px;gap:8px}
-.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hint{font-size:12px;color:#9eacc5;margin-left:auto}
-#screen{flex:1;min-height:320px;position:relative;border:1px solid #26344d;border-radius:10px;overflow:hidden;background:#03060a}
-#screen canvas{width:100%!important;height:100%!important;object-fit:contain;display:block}
-#placeholder{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#aab8d0;padding:20px}
-footer{font-size:12px;color:#8492ab;padding:8px 16px 14px}
-@media(max-width:600px){header{align-items:stretch}.brand{width:100%}.address{width:100%}main{padding:6px}#screen{min-height:55vh}.hint{width:100%;margin:0}}
+:root {
+  color-scheme: dark;
+  font-family: system-ui,-apple-system,"Segoe UI",sans-serif;
+  background: #080c14;
+  color: #eef4ff;
+  --panel: #111a2a;
+  --border: #293750;
+  --cyan: #19d4e8;
+}
+* { box-sizing: border-box; }
+html,body { margin:0; width:100%; min-height:100%; }
+body { min-height:100dvh; display:flex; flex-direction:column; }
+button,input { font:inherit; }
+button {
+  color:#eef4ff;
+  background:#202c42;
+  border:1px solid #3c4b67;
+  border-radius:10px;
+  padding:10px 12px;
+  min-height:42px;
+  font-weight:650;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+button:active { background:#344762; }
+button.primary { background:var(--cyan); color:#041219; border-color:var(--cyan); }
+button:disabled { opacity:.5; }
+header {
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:10px 14px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+}
+.brand { font-weight:800; white-space:nowrap; }
+.status { font-size:12px; color:#ffd166; }
+.status.connected { color:#7ee6b4; }
+.status.error { color:#ff9292; }
+.address { display:flex; gap:7px; flex:1; min-width:210px; }
+input {
+  min-width:0; flex:1; padding:10px;
+  color:white; background:#070b12;
+  border:1px solid #34415b; border-radius:9px;
+}
+main {
+  flex:1; min-height:0; display:flex; flex-direction:column;
+  gap:8px; padding:8px;
+}
+.toolbar,.browser-controls {
+  display:flex; gap:7px; align-items:center; flex-wrap:wrap;
+}
+#screen {
+  position:relative; flex:1; min-height:250px;
+  height:calc(100dvh - 230px);
+  overflow:hidden; border:1px solid #26344d;
+  border-radius:10px; background:#03060a;
+}
+#screen canvas {
+  width:100%!important; height:100%!important;
+  object-fit:contain; display:block;
+}
+#placeholder {
+  position:absolute; z-index:3; inset:0;
+  display:grid; place-items:center; text-align:center;
+  padding:22px; background:#03060a; color:#bdcbe0;
+  white-space:pre-wrap; overflow-wrap:anywhere;
+}
+.message { max-width:620px; line-height:1.6; }
+.error-title { color:#ff9292; font-weight:800; font-size:18px; }
+.diagnostic { font-size:13px; color:#aab8d0; margin-top:8px; }
+
+.mobile-panel {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(120px,.75fr);
+  gap:8px;
+}
+.touchpad {
+  min-height:115px; position:relative; overflow:hidden;
+  border:1px solid #35445f; border-radius:12px;
+  background:linear-gradient(145deg,#172238,#0c1321);
+  display:grid; place-items:center;
+  color:#aab8d0; text-align:center;
+  user-select:none; -webkit-user-select:none;
+  touch-action:none;
+}
+.touchpad strong { display:block; color:#eef4ff; font-size:14px; }
+.touchpad small { display:block; font-size:11px; margin-top:5px; }
+.touchpad.active { border-color:var(--cyan); }
+.side-controls { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.side-controls button { min-width:0; padding:7px 3px; }
+.key-controls { display:flex; gap:7px; flex-wrap:wrap; }
+.key-controls button { flex:1; min-width:55px; }
+.hint { color:#9eacc5; font-size:12px; }
+footer { padding:7px 14px 12px; color:#8492ab; font-size:11px; }
+
+@media(min-width:800px) {
+  .mobile-panel { grid-template-columns:minmax(0,1fr) 260px; }
+  .touchpad { min-height:90px; }
+}
+@media(max-width:600px) {
+  header { padding:8px; gap:8px; }
+  .brand { width:100%; }
+  .address { min-width:0; width:100%; }
+  .address button { padding:8px; }
+  main { padding:6px; gap:7px; }
+  #screen { height:48dvh; min-height:220px; flex:none; }
+  .toolbar button { flex:1; padding:8px 5px; min-height:40px; }
+  .mobile-panel { grid-template-columns:minmax(0,1fr) 124px; }
+  .touchpad { min-height:105px; }
+  .side-controls { gap:5px; }
+  .side-controls button { font-size:12px; min-height:46px; }
+  .key-controls button { min-height:44px; }
+  footer { padding-bottom:max(10px,env(safe-area-inset-bottom)); }
+}
 </style>
-<script type="module">
-import RFB from '/novnc/core/rfb.js';
-window.startRemoteBrowser = () => {
-  const screen = document.getElementById('screen');
-  const placeholder = document.getElementById('placeholder');
-  if (window.rfb) { window.rfb.disconnect(); window.rfb = null; }
-  placeholder.style.display = 'grid';
-  placeholder.textContent = 'Connecting to remote desktop…';
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const rfb = new RFB(screen, `${protocol}//${location.host}/websockify`);
-  rfb.scaleViewport = true;
-  rfb.resizeSession = false;
-  rfb.showDotCursor = true;
-  rfb.background = '#03060a';
-  rfb.addEventListener('connect', () => { placeholder.style.display = 'none'; document.getElementById('status').textContent = 'Connected'; });
-  rfb.addEventListener('disconnect', (e) => {
-    placeholder.style.display = 'grid';
-    placeholder.textContent = e.detail.clean ? 'Disconnected. Click Connect to reconnect.' : 'Connection lost. Click Connect to retry.';
-    document.getElementById('status').textContent = 'Disconnected';
-  });
-  rfb.addEventListener('credentialsrequired', () => rfb.sendCredentials({ password: '' }));
-  window.rfb = rfb;
-};
-window.addEventListener('DOMContentLoaded', () => window.startRemoteBrowser());
-</script>
 </head>
+
 <body>
 <header>
   <div class="brand">◉ Remote Cloud Browser</div>
-  <div id="status" class="status">Starting…</div>
+  <div id="status" class="status">Loading client…</div>
+
   <form class="address" id="navform">
-    <input id="url" type="url" value="https://example.com" aria-label="Website address" placeholder="https://example.com">
-    <button class="primary" type="submit">Open URL</button>
+    <input id="url" type="text" value="https://example.com"
+      aria-label="Website address" placeholder="Enter website address"
+      autocomplete="url" autocapitalize="off" spellcheck="false">
+    <button class="primary" type="submit">Go</button>
   </form>
-  <form method="post" action="/logout"><button type="submit">Log out</button></form>
+
+  <form method="post" action="/logout">
+    <button type="submit">Log out</button>
+  </form>
 </header>
+
 <main>
   <div class="toolbar">
-    <button id="connect">Reconnect</button>
-    <button id="fullscreen">Fullscreen</button>
-    <button id="focus">Focus browser</button>
-    <span class="hint">Click inside the screen to control Chromium · Ctrl+L focuses the address bar</span>
+    <button id="connect" type="button">Reconnect</button>
+    <button id="fullscreen" type="button">Fullscreen</button>
+    <button id="focus" type="button">Focus browser</button>
+    <span class="hint">Touch the desktop or use the touchpad below.</span>
   </div>
-  <div id="screen"><div id="placeholder">Connecting to remote desktop…</div></div>
+
+  <div id="screen">
+    <div id="placeholder">
+      <div class="message">Loading remote desktop…</div>
+    </div>
+  </div>
+
+  <div class="browser-controls" aria-label="Remote browser controls">
+    <button data-key="back" type="button">← Back</button>
+    <button data-key="forward" type="button">Forward →</button>
+    <button data-key="reload" type="button">↻ Reload</button>
+    <button data-key="address" type="button">⌕ Address bar</button>
+  </div>
+
+  <section class="mobile-panel" aria-label="Mobile mouse controls">
+    <div id="touchpad" class="touchpad" role="application"
+      aria-label="Touchpad: drag to move the remote mouse and tap to click">
+      <div>
+        <strong>TOUCHPAD</strong>
+        <small>Drag to move · Tap to click</small>
+        <small>Two-finger scrolling may work in the desktop view</small>
+      </div>
+    </div>
+
+    <div class="side-controls">
+      <button id="leftClick" type="button">Left click</button>
+      <button id="rightClick" type="button">Right click</button>
+      <button id="enter" type="button">Enter ↵</button>
+      <button id="escape" type="button">Esc</button>
+    </div>
+  </section>
+
+  <div class="key-controls" aria-label="Virtual keyboard shortcuts">
+    <button data-key="tab" type="button">Tab ⇥</button>
+    <button data-key="up" type="button">↑</button>
+    <button data-key="down" type="button">↓</button>
+    <button data-key="left" type="button">←</button>
+    <button data-key="right" type="button">→</button>
+    <button data-key="ctrl" type="button">Ctrl</button>
+  </div>
 </main>
-<footer>Single shared browser session. Do not enter sensitive passwords or personal information. The service owner may be able to inspect the remote session.</footer>
-<script>
-document.getElementById('connect').addEventListener('click', () => window.startRemoteBrowser());
-document.getElementById('fullscreen').addEventListener('click', async () => {
-  const el = document.getElementById('screen');
-  if (!document.fullscreenElement) await el.requestFullscreen(); else await document.exitFullscreen();
+
+<footer>
+  One shared browser session. The service owner may be able to inspect your remote session.
+</footer>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const screen = $('screen');
+const placeholder = $('placeholder');
+const status = $('status');
+const connectButton = $('connect');
+const touchpad = $('touchpad');
+
+let RFBClass = null;
+let rfb = null;
+let connected = false;
+let attempt = 0;
+let timeoutId = null;
+let pointerX = 640;
+let pointerY = 400;
+let activeTouch = null;
+let touchMoved = false;
+let ctrlHeld = false;
+
+function setStatus(message, kind = '') {
+  status.textContent = message;
+  status.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function showMessage(title, detail = '', error = false) {
+  placeholder.style.display = 'grid';
+  placeholder.replaceChildren();
+  const wrap = document.createElement('div');
+  wrap.className = 'message';
+
+  const heading = document.createElement('div');
+  heading.className = error ? 'error-title' : '';
+  heading.textContent = title;
+  wrap.appendChild(heading);
+
+  if (detail) {
+    const note = document.createElement('div');
+    note.className = 'diagnostic';
+    note.textContent = detail;
+    wrap.appendChild(note);
+  }
+
+  placeholder.appendChild(wrap);
+}
+
+function clearTimer() {
+  if (timeoutId) clearTimeout(timeoutId);
+  timeoutId = null;
+}
+
+function current() {
+  return Boolean(rfb && connected);
+}
+
+function sendKey(keysym, down) {
+  if (!current()) return;
+  try { rfb.sendKey(keysym, down); } catch (e) {
+    console.warn('Could not send key:', e);
+  }
+}
+
+function tapKey(keysym) {
+  if (!current()) return;
+  rfb.sendKey(keysym, true);
+  rfb.sendKey(keysym, false);
+}
+
+function sendMouse(x, y, mask = 0) {
+  if (!current()) return;
+  const canvas = screen.querySelector('canvas');
+  if (canvas && canvas.width && canvas.height) {
+    pointerX = Math.max(0, Math.min(canvas.width - 1, Math.round(x)));
+    pointerY = Math.max(0, Math.min(canvas.height - 1, Math.round(y)));
+  }
+  try { rfb.sendPointer(pointerX, pointerY, mask); } catch (e) {
+    console.warn('Could not send mouse input:', e);
+  }
+}
+
+function mouseClick(mask) {
+  if (!current()) return;
+  sendMouse(pointerX, pointerY, mask);
+  sendMouse(pointerX, pointerY, 0);
+}
+
+function disconnect() {
+  clearTimer();
+  if (rfb) {
+    const old = rfb;
+    rfb = null;
+    try { old.disconnect(); } catch {}
+  }
+  connected = false;
+}
+
+function startRemoteBrowser() {
+  if (!RFBClass) {
+    setStatus('Client failed', 'error');
+    showMessage('noVNC did not load',
+      'Check that /novnc/core/rfb.js is available on this service.', true);
+    return;
+  }
+
+  disconnect();
+  const thisAttempt = ++attempt;
+  connectButton.disabled = true;
+  setStatus('Connecting…');
+  showMessage('Connecting to remote desktop…',
+    'If this takes more than 20 seconds, check Render logs and WebSocket status.');
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${location.host}/websockify`;
+  console.info('[Remote Browser] Connecting:', wsUrl);
+
+  try {
+    const client = new RFBClass(screen, wsUrl);
+    rfb = client;
+
+    // Lower values reduce image bandwidth at the expense of image quality.
+    client.qualityLevel = 4;
+    client.compressionLevel = 6;
+    client.scaleViewport = true;
+    client.resizeSession = false;
+    client.showDotCursor = true;
+    client.background = '#03060a';
+
+    client.addEventListener('connect', () => {
+      if (thisAttempt !== attempt || rfb !== client) return;
+      connected = true;
+      clearTimer();
+      connectButton.disabled = false;
+      setStatus('Connected', 'connected');
+      placeholder.style.display = 'none';
+      console.info('[Remote Browser] Connected.');
+    });
+
+    client.addEventListener('disconnect', event => {
+      if (thisAttempt !== attempt || rfb !== client) return;
+      connected = false;
+      clearTimer();
+      connectButton.disabled = false;
+      setStatus('Disconnected', 'error');
+
+      const reason = event.detail?.reason || '';
+      showMessage('Remote desktop disconnected',
+        (event.detail?.clean ? 'The server closed the connection.' :
+          'The connection ended unexpectedly.') +
+        (reason ? '\nReason: ' + reason : '') +
+        '\nCheck the Render logs for x11vnc and websockify errors.', true);
+      console.error('[Remote Browser] Disconnected:', event.detail);
+    });
+
+    client.addEventListener('credentialsrequired', () => {
+      if (thisAttempt !== attempt || rfb !== client) return;
+      setStatus('VNC password required', 'error');
+      showMessage('VNC password required',
+        'Check whether x11vnc is running with the expected -nopw option.', true);
+    });
+
+    timeoutId = setTimeout(() => {
+      if (thisAttempt !== attempt || rfb !== client || connected) return;
+      connectButton.disabled = false;
+      setStatus('Connection timed out', 'error');
+      showMessage('Connection timed out',
+        'Check the /websockify WebSocket request in browser developer tools and review Render logs.', true);
+    }, 20000);
+
+  } catch (error) {
+    clearTimer();
+    connectButton.disabled = false;
+    setStatus('Connection failed', 'error');
+    showMessage('Could not start connection', error.message || String(error), true);
+    console.error(error);
+  }
+}
+
+function browserShortcut(name) {
+  if (!current()) {
+    showMessage('Desktop is not connected', 'Reconnect before sending commands.', true);
+    return;
+  }
+
+  rfb.focus();
+
+  switch (name) {
+    case 'back':
+      sendKey(0xffe9, true); tapKey(0xff51); sendKey(0xffe9, false);
+      break;
+    case 'forward':
+      sendKey(0xffe9, true); tapKey(0xff53); sendKey(0xffe9, false);
+      break;
+    case 'reload':
+      sendKey(0xffe3, true); tapKey(0x0072); sendKey(0xffe3, false);
+      break;
+    case 'address':
+      sendKey(0xffe3, true); tapKey(0x006c); sendKey(0xffe3, false);
+      break;
+    case 'tab': tapKey(0xff09); break;
+    case 'up': tapKey(0xff52); break;
+    case 'down': tapKey(0xff54); break;
+    case 'left': tapKey(0xff51); break;
+    case 'right': tapKey(0xff53); break;
+    case 'enter': tapKey(0xff0d); break;
+    case 'escape': tapKey(0xff1b); break;
+    case 'ctrl':
+      ctrlHeld = !ctrlHeld;
+      sendKey(0xffe3, ctrlHeld);
+      document.querySelector('[data-key="ctrl"]').textContent =
+        ctrlHeld ? 'Ctrl ON' : 'Ctrl';
+      break;
+  }
+}
+
+connectButton.addEventListener('click', startRemoteBrowser);
+
+$('fullscreen').addEventListener('click', async () => {
+  try {
+    if (!document.fullscreenElement) await screen.requestFullscreen();
+    else await document.exitFullscreen();
+  } catch (e) { console.warn('Fullscreen unavailable:', e); }
 });
-document.getElementById('focus').addEventListener('click', () => {
-  if (window.rfb) window.rfb.focus();
+
+$('focus').addEventListener('click', () => {
+  if (current()) rfb.focus();
 });
-document.getElementById('navform').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const input = document.getElementById('url');
-  let url = input.value.trim();
+
+document.querySelectorAll('[data-key]').forEach(button => {
+  button.addEventListener('click', () => browserShortcut(button.dataset.key));
+});
+
+$('enter').addEventListener('click', () => browserShortcut('enter'));
+$('escape').addEventListener('click', () => browserShortcut('escape'));
+$('leftClick').addEventListener('click', () => mouseClick(1));
+$('rightClick').addEventListener('click', () => mouseClick(4));
+
+$('navform').addEventListener('submit', event => {
+  event.preventDefault();
+  if (!current()) {
+    showMessage('Desktop is not connected',
+      'Reconnect before opening a website.', true);
+    return;
+  }
+
+  let url = $('url').value.trim();
+  if (!url) return;
   if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-  try { new URL(url); } catch { alert('Enter a valid website address.'); return; }
-  if (window.rfb) {
-    window.rfb.focus();
-    // Send Ctrl+L, type the URL, then Enter through the remote keyboard.
-    const key = (keysym, down) => window.rfb.sendKey(keysym, down);
-    key(0xffe3, true); key(0xffe3, false); // Ctrl
-    key(0x006c, true); key(0x006c, false); // L
-    setTimeout(() => {
+
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+  } catch {
+    alert('Enter a valid HTTP or HTTPS website address.');
+    return;
+  }
+
+  rfb.focus();
+  browserShortcut('address');
+
+  setTimeout(() => {
+    if (!current()) return;
+
+    // Paste is more reliable than simulating individual punctuation keys.
+    if (typeof rfb.clipboardPasteFrom === 'function') {
+      rfb.clipboardPasteFrom(url);
+    } else {
+      // Basic fallback; clipboard support is recommended for full URLs.
       for (const ch of url) {
         const code = ch.codePointAt(0);
-        if (code >= 32 && code <= 126) {
-          const keysym = code >= 97 && code <= 122 ? code : code;
-          window.rfb.sendKey(keysym, true); window.rfb.sendKey(keysym, false);
-        }
+        if (code >= 32 && code <= 126) tapKey(code);
       }
-      window.rfb.sendKey(0xff0d, true); window.rfb.sendKey(0xff0d, false);
-    }, 150);
-  }
+    }
+
+    setTimeout(() => {
+      if (current()) tapKey(0xff0d);
+    }, 250);
+  }, 250);
 });
+
+// Relative touchpad mouse movement. This sends mouse movement to the
+// remote framebuffer without requiring a mouse connected to the phone.
+touchpad.addEventListener('pointerdown', event => {
+  if (!current()) return;
+  event.preventDefault();
+  touchpad.setPointerCapture(event.pointerId);
+  activeTouch = {
+    id: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    startX: event.clientX,
+    startY: event.clientY
+  };
+  touchMoved = false;
+  touchpad.classList.add('active');
+});
+
+touchpad.addEventListener('pointermove', event => {
+  if (!activeTouch || activeTouch.id !== event.pointerId || !current()) return;
+  event.preventDefault();
+
+  const rect = touchpad.getBoundingClientRect();
+  const dx = event.clientX - activeTouch.x;
+  const dy = event.clientY - activeTouch.y;
+
+  if (Math.abs(event.clientX - activeTouch.startX) +
+      Math.abs(event.clientY - activeTouch.startY) > 6) {
+    touchMoved = true;
+  }
+
+  activeTouch.x = event.clientX;
+  activeTouch.y = event.clientY;
+
+  const canvas = screen.querySelector('canvas');
+  const scale = canvas ? Math.max(canvas.width / rect.width, canvas.height / rect.height) : 2;
+
+  pointerX += dx * scale * 0.9;
+  pointerY += dy * scale * 0.9;
+  sendMouse(pointerX, pointerY, 0);
+});
+
+function endTouchpad(event) {
+  if (!activeTouch || activeTouch.id !== event.pointerId) return;
+  const wasClick = !touchMoved;
+  activeTouch = null;
+  touchpad.classList.remove('active');
+
+  if (wasClick && current()) mouseClick(1);
+}
+
+touchpad.addEventListener('pointerup', endTouchpad);
+touchpad.addEventListener('pointercancel', endTouchpad);
+touchpad.addEventListener('contextmenu', event => event.preventDefault());
+
+// Load the noVNC client and then connect.
+try {
+  const module = await import('/novnc/core/rfb.js');
+  RFBClass = module.default;
+  if (typeof RFBClass !== 'function') {
+    throw new Error('The noVNC module did not export the RFB client.');
+  }
+  setStatus('Client loaded');
+  startRemoteBrowser();
+} catch (error) {
+  console.error('[Remote Browser] noVNC load failed:', error);
+  setStatus('Client failed to load', 'error');
+  showMessage('Could not load noVNC',
+    'Check /novnc/core/rfb.js and the browser console for details.', true);
+}
 </script>
 </body>
 </html>
