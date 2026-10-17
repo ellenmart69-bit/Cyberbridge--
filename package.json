@@ -1,0 +1,14 @@
+{
+  "name": "remote-cloud-browser",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Password-protected live Chromium desktop using noVNC, Xvfb, and Node.js",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "cookie": "^0.6.0",
+    "express": "^4.21.2",
+    "http-proxy": "^1.18.1"
+  }
+}

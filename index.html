@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Remote Cloud Browser</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#080c14;color:#eef4ff}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;background:#111a2a;border-bottom:1px solid #28334a}
+.brand{font-weight:800;white-space:nowrap}.status{font-size:12px;color:#7ee6b4}.address{display:flex;gap:8px;flex:1;min-width:220px}
+input{flex:1;min-width:100px;background:#070b12;color:#fff;border:1px solid #34415b;border-radius:8px;padding:10px}
+button{border:1px solid #3c4b67;background:#202c42;color:#eef4ff;padding:9px 12px;border-radius:8px;cursor:pointer;font-weight:650}
+button.primary{background:#19d4e8;color:#041219;border-color:#19d4e8}button:hover{filter:brightness(1.12)}
+main{flex:1;display:flex;flex-direction:column;min-height:0;padding:10px;gap:8px}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hint{font-size:12px;color:#9eacc5;margin-left:auto}
+#screen{flex:1;min-height:320px;position:relative;border:1px solid #26344d;border-radius:10px;overflow:hidden;background:#03060a}
+#screen canvas{width:100%!important;height:100%!important;object-fit:contain;display:block}
+#placeholder{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#aab8d0;padding:20px}
+footer{font-size:12px;color:#8492ab;padding:8px 16px 14px}
+@media(max-width:600px){header{align-items:stretch}.brand{width:100%}.address{width:100%}main{padding:6px}#screen{min-height:55vh}.hint{width:100%;margin:0}}
+</style>
+<script type="module">
+import RFB from '/novnc/core/rfb.js';
+window.startRemoteBrowser = () => {
+  const screen = document.getElementById('screen');
+  const placeholder = document.getElementById('placeholder');
+  if (window.rfb) { window.rfb.disconnect(); window.rfb = null; }
+  placeholder.style.display = 'grid';
+  placeholder.textContent = 'Connecting to remote desktop…';
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const rfb = new RFB(screen, `${protocol}//${location.host}/websockify`);
+  rfb.scaleViewport = true;
+  rfb.resizeSession = false;
+  rfb.showDotCursor = true;
+  rfb.background = '#03060a';
+  rfb.addEventListener('connect', () => { placeholder.style.display = 'none'; document.getElementById('status').textContent = 'Connected'; });
+  rfb.addEventListener('disconnect', (e) => {
+    placeholder.style.display = 'grid';
+    placeholder.textContent = e.detail.clean ? 'Disconnected. Click Connect to reconnect.' : 'Connection lost. Click Connect to retry.';
+    document.getElementById('status').textContent = 'Disconnected';
+  });
+  rfb.addEventListener('credentialsrequired', () => rfb.sendCredentials({ password: '' }));
+  window.rfb = rfb;
+};
+window.addEventListener('DOMContentLoaded', () => window.startRemoteBrowser());
+</script>
+</head>
+<body>
+<header>
+  <div class="brand">◉ Remote Cloud Browser</div>
+  <div id="status" class="status">Starting…</div>
+  <form class="address" id="navform">
+    <input id="url" type="url" value="https://example.com" aria-label="Website address" placeholder="https://example.com">
+    <button class="primary" type="submit">Open URL</button>
+  </form>
+  <form method="post" action="/logout"><button type="submit">Log out</button></form>
+</header>
+<main>
+  <div class="toolbar">
+    <button id="connect">Reconnect</button>
+    <button id="fullscreen">Fullscreen</button>
+    <button id="focus">Focus browser</button>
+    <span class="hint">Click inside the screen to control Chromium · Ctrl+L focuses the address bar</span>
+  </div>
+  <div id="screen"><div id="placeholder">Connecting to remote desktop…</div></div>
+</main>
+<footer>Single shared browser session. Do not enter sensitive passwords or personal information. The service owner may be able to inspect the remote session.</footer>
+<script>
+document.getElementById('connect').addEventListener('click', () => window.startRemoteBrowser());
+document.getElementById('fullscreen').addEventListener('click', async () => {
+  const el = document.getElementById('screen');
+  if (!document.fullscreenElement) await el.requestFullscreen(); else await document.exitFullscreen();
+});
+document.getElementById('focus').addEventListener('click', () => {
+  if (window.rfb) window.rfb.focus();
+});
+document.getElementById('navform').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = document.getElementById('url');
+  let url = input.value.trim();
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try { new URL(url); } catch { alert('Enter a valid website address.'); return; }
+  if (window.rfb) {
+    window.rfb.focus();
+    // Send Ctrl+L, type the URL, then Enter through the remote keyboard.
+    const key = (keysym, down) => window.rfb.sendKey(keysym, down);
+    key(0xffe3, true); key(0xffe3, false); // Ctrl
+    key(0x006c, true); key(0x006c, false); // L
+    setTimeout(() => {
+      for (const ch of url) {
+        const code = ch.codePointAt(0);
+        if (code >= 32 && code <= 126) {
+          const keysym = code >= 97 && code <= 122 ? code : code;
+          window.rfb.sendKey(keysym, true); window.rfb.sendKey(keysym, false);
+        }
+      }
+      window.rfb.sendKey(0xff0d, true); window.rfb.sendKey(0xff0d, false);
+    }, 150);
+  }
+});
+</script>
+</body>
+</html>
